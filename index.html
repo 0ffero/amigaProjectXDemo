@@ -1,0 +1,386 @@
+<html>
+<head>
+    <title>Amiga Demo - HTML5 Canvas</title>
+    <style type="text/css">
+        body { background-color: black; }
+        canvas { padding: 0; margin: auto; display: block; border: 1px solid white; }
+    </style>
+    <script type="text/javascript">
+    var defaultVolume = 0.1;
+    var soundsLoaded = false;
+    var SFX_speedUp = new Audio();
+    SFX_speedUp.oncanplay = function() {
+        SFX_speedUp.volume=defaultVolume;
+        soundsLoaded = true;
+    }
+    SFX_speedUp.src="soundEffects/Speeding Up.m4a";
+    SFX_speedUp.load();
+    </script>
+</head>
+<body onload="init()">
+    <canvas id='projectxtunnel' width='1600' height='900'></canvas>
+</body>
+
+<script type='text/javascript'>
+    // GLOBAL VARIABLES
+    var showConsole = false;
+    var c, ctx, cW, cH, centreX, centreY;
+    var animID;
+    
+    var hue = 0;
+
+    // TUNNEL VARS
+    var tunnelYOffset = []; var fillOffset=4;
+    var tunnelSectionLen = 0;
+    // TUNNEL TEXTURE
+    var texture = new Image();
+    var pattern;
+
+    // DIFFICULTY VARS
+    var difficulty = 1;
+    var speedX = 10; var maxSpeedX = 50; var speedChange = false;
+    var bounds = [];
+
+    // SHIP AND THEME VARS
+    var ships = ['ship', 'xwing']; // xwing theme still to be completed (tunnel bg doesn't scroll yet)
+    var theme = ships[1];
+    
+    var shipAngle = ['-22.5deg', '0', '22.5deg']; var shipXYA = [150, 450, shipAngle[1]]; // the front of the ship is at this pos (used for collision detection)
+    var ship = new Image(); 
+    var shipSize = [];
+    var shipLoaded = false;
+    var shipAutoPilot =  true;
+
+    
+
+    // STAR FIELD (TUNNEL BACKGROUND)
+    var starField = [];
+
+    // UI
+    var score = 0;
+
+
+    // GLOBAL FUNCTIONS
+        
+    // Ship Functions inc. Collision Detection
+    function collisionDetection() {
+        userLog = "Collision : ";
+        imageData = [];
+        
+        xPos = parseInt(shipXYA[0] + (shipSize[0] / 2));
+        shipYPos = shipXYA[1]; shipHeight = shipSize[1];
+        myImageData = ctx.getImageData(xPos, 0, 1, cH);
+        tempArray = [];
+        for (i=0; i<myImageData.data.length; i+=4) { 
+            if (myImageData.data[i]=="255" && myImageData.data[i+1]=="255" && myImageData.data[i+2]=="255") {
+                tempArray.push( [ i/4, myImageData.data[i], myImageData.data[i+1], myImageData.data[i+2] ] ); 
+            }
+        }
+        
+        userLog += "Grabbing Image Data for Col: " + xPos + " --- ";
+        userLog += "Ship Y Pos: " + shipYPos + " --- ";
+        
+        topTunnelY = tempArray[0][0];
+        bottomTunnelY = tempArray[tempArray.length-1][0];
+        if ( shipYPos - (shipHeight / 2) > topTunnelY  && shipYPos + (shipHeight/2) < bottomTunnelY) {
+            ctx.strokeStyle='#00FF00';
+            userLog += "Ship Is Fine --- ";
+        } else {
+            ctx.strokeStyle='#FF0000';
+            userLog += "Ship Destroyed --- ";
+        }
+
+        if (shipAutoPilot==true) {
+            shipXYA[1] = bottomTunnelY - ((bottomTunnelY-topTunnelY)/2);
+            userLog += "Autopilot: " + shipAutoPilot.toString() + " ---";
+        }
+        
+        showOutputLine(userLog, 10, -40);
+
+    }
+    function drawShip() {
+        ctx.drawImage(ship, shipXYA[0]-(shipSize[0]/2), shipXYA[1]-(shipSize[1]/2));
+    }
+    
+    // Difficulty Functions
+    function requestSpeedChange(newSpeed=1) {
+        speedChange=newSpeed;
+        if (showConsole==true) { console.log("Changing Speed to " + (newSpeed*10)); }
+    } 
+    function setDifficultyLevel() {
+        difficulty = speedChange;
+        speedX = 10 * speedChange; yOffset1 = -centreX; yOffset2 = -cW;
+        bounds = [ [ yOffset1 - (speedX-1), yOffset1 + (speedX-1) ], [ yOffset2 - (speedX-1), yOffset2 + (speedX-1) ] ];
+    }
+    
+    // Star Filed Functions
+    function starFieldDraw() {
+        for (i=0; i<starField.length; i++) {
+            layer = starField[i][0]; 
+            starX = starField[i][1]; starY = starField[i][2];
+            sizeofStar = layer+1;
+            ctx.fillStyle = 'blue';
+            //ctx.fillRect(starX - (sizeofStar/2), starY - (sizeofStar/2), sizeofStar, sizeofStar);
+            ctx.beginPath();
+            ctx.arc(starX - (sizeofStar/2), starY - (sizeofStar/2), sizeofStar, 0, 2 * Math.PI);
+            ctx.closePath();
+            ctx.fill();
+        }
+    }
+    function starFieldGenerate() {
+        for (i=0; i<cH/2; i++) {
+            layer = ~~ (3 * Math.random());
+            x = ~~(Math.random() * cW) + 1;
+            y = ~~(Math.random() * (cH-65)) + 1;
+            starField.push([ layer, x, y ]);
+        }
+        //starFieldDraw();
+    }
+    function starFieldUpdate() {
+        for (i=0; i<starField.length; i++) {
+            for (i=0; i<starField.length; i++) {
+            layer = xOffset = starField[i][0]; xOffset+=1;
+            starX = starField[i][1];
+
+            // is star is off screen?
+            if (starX-xOffset<=0) {
+                newX = cW + layer;
+                newY = ~~(Math.random() * (cH-65)) + 1;
+                starField[i] = [ layer, newX, newY ];
+            }
+
+            starField[i][1] -= xOffset*difficulty;            
+            }
+        }
+    }
+    
+    // Tunnel Functions
+    function tunnelAddNewOffset() {
+        userLog = "Adding Tunnel Section:";
+        arrayLen = tunnelYOffset.length;
+        topY = parseFloat(tunnelYOffset[arrayLen-1][0]);
+        xOffset =  tunnelYOffset[0][2];
+        
+        // topY is coming in as 0.1-0.7
+        maxDistance = difficulty / 10;
+        if (topY==0.1) { // down or straight
+            direction = ~~(1+(Math.random()*2))-1;
+        } else if ( topY>0.1 && topY<0.7) { // we can move up or down from here
+            direction = ~~(Math.random() *3)-1;
+        } else { // up or straight
+            direction = ~~(Math.random()*2)-1;
+        }
+        // possible directions : 1 = move down (ie increment topY by 0.1), 0 = straight (ie topY stays the same), -1 move up (ie decrement topY by 0.1)
+        if (direction == 1) {
+            topY+=0.1;   userLog += " \u{1F81F}\u{1F81F}\u{1F81F}";
+        } else  if (direction == -1) {
+            topY-=0.1;   userLog += " \u{1F81D}\u{1F81D}\u{1F81D}";
+        } else {
+            userLog += " \u{1F81E}\u{1F81E}\u{1F81E}";
+        }
+
+        topY = parseFloat(topY.toFixed(1)); // because we're playing with floats we have to be very specific on what the final float should
+                                            // look like. In our case adding 0.2 to another number such as 0.7 would actually come out as
+                                            // 0.9000'3 so we have to toFixed (converts to string) then parseFloat (convert back to a float)
+        bottomY = topY + 0.2;
+        bottomY = parseFloat(bottomY.toFixed(1)); // same here (see above explanation)
+        tunnelYOffset.push([topY, bottomY, tunnelSectionWidth*3]);
+
+        if (speedChange!=false) {
+            userLog2 = "Difficulty: " + difficulty + ", Requested: " + speedChange + "; ";
+            setDifficultyLevel();
+            if (soundsLoaded==true) { SFX_speedUp.play(); } else { console.log("Sorry, sound effects havn't loaded yet... derp");}
+            userLog2 += "Changed to " + speedChange; oldSpeed = speedChange;
+            speedChange = false;
+            userLog2 += " SpeedChange set to " + speedChange.toString();
+            ctx.clearRect(centreX, cH-30, centreX, 30);
+            showOutputLine(userLog2, centreX, -10, 16);
+            
+            newMessage = "Difficulty: " + oldSpeed;
+            updateUIAfterTimeout(newMessage, 5000);
+        }
+
+        ctx.clearRect(0, cH-30, centreX, 30);
+        showOutputLine(userLog, 10, -10, 16);
+
+        if (showConsole == true) { console.log(userLog); }
+    }
+    function fillNonTunnel() {
+        // this poly will be built when drawing the tunnel
+        poly = [];
+        polyLower = [];
+        tLen = tunnelYOffset.length-1;
+        poly.push([ tunnelYOffset[0][2], 0],[ tunnelYOffset[tLen][2]+800, 0 ]);
+        polyLower.push([ tunnelYOffset[0][2], cH-65],[ tunnelYOffset[tLen][2]+800, cH-65 ])
+        for (i=0; i<tLen; i++) {
+            xCoord = tunnelYOffset[tLen-i][2]+800;
+            xCoord2 = tunnelYOffset[tLen-i][2]+800;
+            yCoord = tunnelYOffset[tLen-i][0]*cH-fillOffset;
+            yCoord2 = tunnelYOffset[tLen-i][1]*cH+fillOffset
+            poly.push([xCoord, yCoord]);
+            polyLower.push([xCoord2, yCoord2]);
+        }
+        poly.push([ poly[poly.length-1][0]-800, tunnelYOffset[0][0]*cH-fillOffset ], [ poly[0][0], tunnelYOffset[0][0]*cH-fillOffset ] )
+        polyLower.push([ poly[poly.length-1][0]+800, tunnelYOffset[0][1]*cH+fillOffset ], [ poly[0][0], tunnelYOffset[0][1]*cH+fillOffset ] )
+
+        debugger;
+
+        // rotating colour
+        ctx.fillStyle = 'hsl(' + hue + ', 100%, 25%)';
+        hue < 359 ? hue+=difficulty/10 : hue=0;
+        ctx.beginPath();
+        ctx.moveTo( poly[0][0], poly[0][1] );
+        for( i=1 ; i < poly.length; i++ ){ ctx.lineTo( poly[i][0] , poly[i][1] ); }
+        ctx.closePath();
+        ctx.fill();
+
+        ctx.beginPath();
+        ctx.moveTo( polyLower[0][0], polyLower[0][1] );
+        for( i=1 ; i < polyLower.length; i++ ){ ctx.lineTo( polyLower[i][0] , polyLower[i][1] ); }
+        ctx.closePath();
+
+        
+        ctx.fill();
+        
+    }
+    function tunnelDraw() {
+        if (theme=="xwing") {
+            tunnelFill();
+        }
+
+        fillNonTunnel();
+        // draw first tunnel section
+        // top line
+        x = tunnelYOffset[0][2];
+        y = 0 + (tunnelYOffset[0][0] *cH);
+        ctx.strokeStyle="#FFFFFF"; ctx.beginPath();    ctx.moveTo(x, y );   ctx.lineTo(x+tunnelSectionLen, y );    ctx.stroke();
+        // bottom line
+        y2 = 0 + (tunnelYOffset[0][1] *cH);
+        ctx.strokeStyle="#FFFFFF"; ctx.beginPath();    ctx.moveTo(x, y2);   ctx.lineTo(x+tunnelSectionLen, y2);    ctx.stroke();
+
+        for (i=1; i<=3; i++) {
+            x = tunnelYOffset[i][2];
+            ctx.strokeStyle="#FFFFFF"; ctx.beginPath(); ctx.moveTo(x, y ); y  = 0 + (tunnelYOffset[i][0] * cH); ctx.lineTo(x+tunnelSectionLen, y ); ctx.stroke();
+            ctx.strokeStyle="#FFFFFF"; ctx.beginPath(); ctx.moveTo(x, y2); y2 = 0 + (tunnelYOffset[i][1] * cH); ctx.lineTo(x+tunnelSectionLen, y2); ctx.stroke();
+        }
+    }
+    function tunnelFill() {
+        if (theme=="xwing") {
+            ctx.fillStyle = pattern;
+            ctx.fillRect(0, 80, cW, cH-65-80);
+        }
+    }
+    function tunnelScroll() {
+        for (i=0; i<tunnelYOffset.length; i++) { tunnelYOffset[i][2]-=speedX; }
+    }
+
+    // UI Functions
+    function showScore() {
+        ctx.font = '48px monospace';
+        ctx.fillStyle="yellow";
+        message = "SCORE: " + score.toFixed(0);
+        ctx.fillText(message, centreX-(centreX/2), 40, 300);
+    }
+    function showOutputLine(userLog, x=10, y=-10, fontsize=24) {
+        ctx.font = fontsize + 'px monospace';
+        ctx.fillStyle = "#FFF";
+        ctx.strokeText(userLog, x, cH+y);
+        ctx.fillText(  userLog, c, cH+y);
+
+    }
+    function updateUIAfterTimeout(message, timeout=2000) {
+        setTimeout( function() {
+            ctx.clearRect(centreX, cH-30, centreX, 30);
+            showOutputLine(message, centreX, -10, 16);
+        }, timeout)
+    }
+    
+
+
+    function init() {
+        requestSpeedChange(2);
+        c = document.getElementById("projectxtunnel");
+        ctx = c.getContext("2d");
+        cW = c.width; cH = c.height;
+        centreX = tunnelSectionLen = cW/2; centreY = cH/2;
+
+        // set up default drawing stuff
+        ctx.lineWidth=2;
+        
+        texture.src='textures/deathstar_tunnel_homemade.png';
+        ship.src='images/' + theme + '.png';
+        
+        ship.onload = function() {
+            shipSize = [ship.width, ship.height];
+            
+            // set the bounds to deal with creating new tunnel offsets
+            yOffset1 = -centreX;
+            yOffset2 = -cW;
+            bounds = [ [ yOffset1 - (speedX-1), yOffset1 + (speedX-1) ], [ yOffset2 - (speedX-1), yOffset2 + (speedX-1) ] ]; // left most pixel, right most pixel
+            
+            // initialise tunnel section
+            tunnelSectionWidth = centreX;
+            tunnelYOffset =  [ [0.1, 0.9, 0], [0.4, 0.6, tunnelSectionWidth], [0.4, 0.6, tunnelSectionWidth*2],  [0.4, 0.6, tunnelSectionWidth*3] ];
+
+            // generate star field or deathstar tunnel
+            if (theme=="xwing") {
+                c.style.backgroundColor="#333";
+                pattern = ctx.createPattern(texture, 'repeat');
+            } else {
+                starFieldGenerate();
+            }
+
+            // draw the ship and tunnels
+            drawShip();
+            tunnelDraw();
+            
+            // animate
+            requestAnimationFrame(mainLoop);
+        }
+    }
+
+    function mainLoop() {
+        ctx.clearRect(0, 0, cW, cH-30);
+        
+        if (theme=="ship") {
+            starFieldDraw(); starFieldUpdate();
+        }
+        
+        tunnelDraw();
+        collisionDetection();
+        
+        drawShip();
+        showScore();
+
+        score+=0.5*difficulty;
+        if (score>150 && score<10000 && difficulty<5) { requestSpeedChange(5); } // Medium Speed for humans
+        // we need a slightly faster increase for human players in here (probably 8 at most)
+        if (score>10000 && score<20000 && difficulty<10) { requestSpeedChange(10); } // CPU Only!
+        if (score>20000 && score<30000 && difficulty<20) { requestSpeedChange(20); } // CPU Only!  Youll see why in the demo
+        if (score>30000 && score<32000 && difficulty>10) { requestSpeedChange(10); } // CPU Only!
+        if (score>32000 && difficulty>5) { requestSpeedChange(5); }
+        
+        // deal with tunnels already in the array
+        xPos = tunnelYOffset[0][2];
+        positionCounter = tunnelYOffset[0][3];
+        
+        /*
+        if (xPos>=bounds[0][0] && xPos<=bounds[0][1]) {
+            tunnelYOffset[0][3]=1; tunnelAddNewOffset();
+        }
+        if (xPos>=bounds[1][0] && xPos<=bounds[1][1]) {
+            tunnelYOffset[0][3]=2; tunnelAddNewOffset(); tunnelYOffset.shift();
+        }
+        */
+        
+        if (xPos == -tunnelSectionLen) { tunnelAddNewOffset(); }
+        if (xPos == -tunnelSectionLen*2) { tunnelAddNewOffset(); tunnelYOffset.shift(); }
+
+        // scroll the tunnels -- this is a sigle line command, but it isn't very "prominent" in the code, so Ive moved it to a function
+        tunnelScroll();
+        
+        requestAnimationFrame(mainLoop)
+    }
+
+</script>
+</html>
