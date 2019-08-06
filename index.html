@@ -22,6 +22,76 @@
 </body>
 
 <script type='text/javascript'>
+    // USER CONTROLS
+    var keysDown = [];
+    movementKeys = ("ArrowUp,ArrowDown,ArrowLeft,ArrowRight").split(",");
+    for (i=0; i<movementKeys.length; i++) {
+        keysDown[movementKeys[i]] = "OFF";
+    }
+    document.addEventListener('keydown', keyDown);
+    document.addEventListener('keyup',     keyUp);
+    
+    function keyDown(e) {
+        keyCode = e.code;
+        if (!keysDown[keyCode]) {
+            //config key
+            configChange();
+        } else {
+            if (keysDown[keyCode]!="ON") {
+                keysDown[keyCode] = "ON";
+                console.log(keysDown);
+            }
+        }
+    }
+    function keyUp(e) {
+        keyCode = e.code;
+        if (!keysDown[keyCode]) {
+            // do nothing!
+        } else if (keysDown[keyCode]!="OFF") {
+            keysDown[keyCode]= "OFF";
+            console.log(keysDown);
+        }
+    }
+    function configChange() {
+        //debugger;
+        switch (keyCode) {
+            case 'KeyA':
+                shipAutoPilot == false ? shipAutoPilot=true: shipAutoPilot=false;
+                break;
+            case 'KeyX': 
+                if (theme == "ship") { theme = "xwing"; c.style.backgroundColor="#333"; } else { theme = "ship"; c.style.backgroundColor="#000"; } 
+                ship.src='images/' + theme + '.png';
+                ship.onload = function() {
+                    shipSize = [ship.width, ship.height];
+                    // set the bounds to deal with creating new tunnel offsets
+                    yOffset1 = -centreX;
+                    yOffset2 = -cW;
+                    bounds = [ [ yOffset1 - (speedX-1), yOffset1 + (speedX-1) ], [ yOffset2 - (speedX-1), yOffset2 + (speedX-1) ] ]; // left most pixel, right most pixel
+                }
+                break;
+            case 'Minus':
+                oldDif = difficulty;
+                for (i=0; i<difficultyLevels.length; i++) {
+                    if (difficultyLevels[i] == oldDif && i != 0) {
+                        newDif = difficultyLevels[i-1];
+                        autoDifficulty = false;
+                        requestSpeedChange(newDif);
+                    }
+                }
+            break;
+            case 'Equal':
+                oldDif = difficulty;
+                for (i=0; i<difficultyLevels.length; i++) {
+                    if (difficultyLevels[i] == oldDif && i != difficultyLevels.length-1) {
+                        newDif = difficultyLevels[i+1];
+                        autoDifficulty = false;
+                        requestSpeedChange(newDif);
+                    }
+                }
+            break;
+        }
+    }
+    
     // GLOBAL VARIABLES
     var showConsole = false;
     var c, ctx, cW, cH, centreX, centreY;
@@ -29,16 +99,10 @@
     
     var hue = 0;
 
-    // TUNNEL VARS
-    var tunnelYOffset = []; var fillOffset=4;
-    var tunnelSectionLen = 0;
-    // TUNNEL TEXTURE
-    var texture = new Image();
-    var pattern;
-
     // DIFFICULTY VARS
-    var difficulty = 1;
+    var difficulty = 1; var autoDifficulty = true;
     var speedX = 10; var maxSpeedX = 50; var speedChange = false;
+    var difficultyLevels = [ 0.5, 1, 2, 5, 10, 20 ];
     var bounds = [];
 
     // SHIP AND THEME VARS
@@ -51,17 +115,35 @@
     var shipLoaded = false;
     var shipAutoPilot =  true;
 
-    
-
     // STAR FIELD (TUNNEL BACKGROUND)
     var starField = [];
+
+    // TUNNEL VARS
+    var tunnelYOffset = []; var fillOffset=4;
+    var tunnelSectionLen = 0;
+    // TUNNEL TEXTURE
+    var texture = new Image();
+        texture.src='textures/deathstar_tunnel_homemade.png';
+    var pattern;
 
     // UI
     var score = 0;
 
 
-    // GLOBAL FUNCTIONS
-        
+
+    // GLOBAL FUNCTIONS    
+
+    // Difficulty Functions
+    function requestSpeedChange(newSpeed=1) {
+        speedChange=newSpeed;
+        if (showConsole==true) { console.log("Changing Speed to " + (newSpeed*10)); }
+    } 
+    function setDifficultyLevel() {
+        difficulty = speedChange;
+        speedX = 10 * speedChange; yOffset1 = -centreX; yOffset2 = -cW;
+        bounds = [ [ yOffset1 - (speedX-1), yOffset1 + (speedX-1) ], [ yOffset2 - (speedX-1), yOffset2 + (speedX-1) ] ];
+    }
+    
     // Ship Functions inc. Collision Detection
     function collisionDetection() {
         userLog = "Collision : ";
@@ -102,18 +184,7 @@
         ctx.drawImage(ship, shipXYA[0]-(shipSize[0]/2), shipXYA[1]-(shipSize[1]/2));
     }
     
-    // Difficulty Functions
-    function requestSpeedChange(newSpeed=1) {
-        speedChange=newSpeed;
-        if (showConsole==true) { console.log("Changing Speed to " + (newSpeed*10)); }
-    } 
-    function setDifficultyLevel() {
-        difficulty = speedChange;
-        speedX = 10 * speedChange; yOffset1 = -centreX; yOffset2 = -cW;
-        bounds = [ [ yOffset1 - (speedX-1), yOffset1 + (speedX-1) ], [ yOffset2 - (speedX-1), yOffset2 + (speedX-1) ] ];
-    }
-    
-    // Star Filed Functions
+    // Star Field Functions
     function starFieldDraw() {
         for (i=0; i<starField.length; i++) {
             layer = starField[i][0]; 
@@ -155,56 +226,6 @@
     }
     
     // Tunnel Functions
-    function tunnelAddNewOffset() {
-        userLog = "Adding Tunnel Section:";
-        arrayLen = tunnelYOffset.length;
-        topY = parseFloat(tunnelYOffset[arrayLen-1][0]);
-        xOffset =  tunnelYOffset[0][2];
-        
-        // topY is coming in as 0.1-0.7
-        maxDistance = difficulty / 10;
-        if (topY==0.1) { // down or straight
-            direction = ~~(1+(Math.random()*2))-1;
-        } else if ( topY>0.1 && topY<0.7) { // we can move up or down from here
-            direction = ~~(Math.random() *3)-1;
-        } else { // up or straight
-            direction = ~~(Math.random()*2)-1;
-        }
-        // possible directions : 1 = move down (ie increment topY by 0.1), 0 = straight (ie topY stays the same), -1 move up (ie decrement topY by 0.1)
-        if (direction == 1) {
-            topY+=0.1;   userLog += " \u{1F81F}\u{1F81F}\u{1F81F}";
-        } else  if (direction == -1) {
-            topY-=0.1;   userLog += " \u{1F81D}\u{1F81D}\u{1F81D}";
-        } else {
-            userLog += " \u{1F81E}\u{1F81E}\u{1F81E}";
-        }
-
-        topY = parseFloat(topY.toFixed(1)); // because we're playing with floats we have to be very specific on what the final float should
-                                            // look like. In our case adding 0.2 to another number such as 0.7 would actually come out as
-                                            // 0.9000'3 so we have to toFixed (converts to string) then parseFloat (convert back to a float)
-        bottomY = topY + 0.2;
-        bottomY = parseFloat(bottomY.toFixed(1)); // same here (see above explanation)
-        tunnelYOffset.push([topY, bottomY, tunnelSectionWidth*3]);
-
-        if (speedChange!=false) {
-            userLog2 = "Difficulty: " + difficulty + ", Requested: " + speedChange + "; ";
-            setDifficultyLevel();
-            if (soundsLoaded==true) { SFX_speedUp.play(); } else { console.log("Sorry, sound effects havn't loaded yet... derp");}
-            userLog2 += "Changed to " + speedChange; oldSpeed = speedChange;
-            speedChange = false;
-            userLog2 += " SpeedChange set to " + speedChange.toString();
-            ctx.clearRect(centreX, cH-30, centreX, 30);
-            showOutputLine(userLog2, centreX, -10, 16);
-            
-            newMessage = "Difficulty: " + oldSpeed;
-            updateUIAfterTimeout(newMessage, 5000);
-        }
-
-        ctx.clearRect(0, cH-30, centreX, 30);
-        showOutputLine(userLog, 10, -10, 16);
-
-        if (showConsole == true) { console.log(userLog); }
-    }
     function fillNonTunnel() {
         // this poly will be built when drawing the tunnel
         poly = [];
@@ -222,8 +243,6 @@
         }
         poly.push([ poly[poly.length-1][0]-800, tunnelYOffset[0][0]*cH-fillOffset ], [ poly[0][0], tunnelYOffset[0][0]*cH-fillOffset ] )
         polyLower.push([ poly[poly.length-1][0]+800, tunnelYOffset[0][1]*cH+fillOffset ], [ poly[0][0], tunnelYOffset[0][1]*cH+fillOffset ] )
-
-        debugger;
 
         // rotating colour
         ctx.fillStyle = 'hsl(' + hue + ', 100%, 25%)';
@@ -273,6 +292,58 @@
     function tunnelScroll() {
         for (i=0; i<tunnelYOffset.length; i++) { tunnelYOffset[i][2]-=speedX; }
     }
+    function tunnelAddNewOffset() {
+        userLog = "Adding Tunnel Section:";
+        arrayLen = tunnelYOffset.length;
+        topY = parseFloat(tunnelYOffset[arrayLen-1][0]);
+        xOffset =  tunnelYOffset[0][2];
+        
+        // topY is coming in as 0.1-0.7
+        maxDistance = difficulty / 10;
+        if (topY==0.1) { // down or straight
+            direction = ~~(1+(Math.random()*2))-1;
+        } else if ( topY>0.1 && topY<0.7) { // we can move up or down from here
+            direction = ~~(Math.random() *3)-1;
+        } else { // up or straight
+            direction = ~~(Math.random()*2)-1;
+        }
+        // possible directions : 1 = move down (ie increment topY by 0.1), 0 = straight (ie topY stays the same), -1 move up (ie decrement topY by 0.1)
+        if (direction == 1) {
+            topY+=0.1;   userLog += " \u{1F81F}\u{1F81F}\u{1F81F}";
+        } else  if (direction == -1) {
+            topY-=0.1;   userLog += " \u{1F81D}\u{1F81D}\u{1F81D}";
+        } else {
+            userLog += " \u{1F81E}\u{1F81E}\u{1F81E}";
+        }
+
+        topY = parseFloat(topY.toFixed(1)); // because we're playing with floats we have to be very specific on what the final float should
+                                            // look like. In our case adding 0.2 to another number such as 0.7 would actually come out as
+                                            // 0.9000'3 so we have to toFixed (converts to string) then parseFloat (convert back to a float)
+        bottomY = topY + 0.2;
+        bottomY = parseFloat(bottomY.toFixed(1)); // same here (see above explanation)
+        tunnelYOffset.push([topY, bottomY, tunnelSectionWidth*3]);
+
+        if (speedChange!=false) {
+            userLog2 = "Difficulty: " + difficulty + ", Requested: " + speedChange + "; ";
+            setDifficultyLevel();
+            if (soundsLoaded==true) { SFX_speedUp.play(); } else { console.log("Sorry, sound effects havn't loaded yet... derp");}
+            userLog2 += "Changed to " + speedChange; oldSpeed = speedChange;
+            speedChange = false;
+            userLog2 += " SpeedChange set to " + speedChange.toString();
+            ctx.clearRect(centreX, cH-30, centreX, 30);
+            showOutputLine(userLog2, centreX, -10, 16);
+            
+            newMessage = "Difficulty: " + oldSpeed;
+            updateUIAfterTimeout(newMessage, 5000);
+        }
+
+        ctx.clearRect(0, cH-30, centreX, 30);
+        showOutputLine(userLog, 10, -10, 16);
+
+        showOutputLine("A: Autopilot X: Ship Type, -: Slow Down, +: Speed Up", 300, -10, 16);
+
+        if (showConsole == true) { console.log(userLog); }
+    }
 
     // UI Functions
     function showScore() {
@@ -294,8 +365,6 @@
             showOutputLine(message, centreX, -10, 16);
         }, timeout)
     }
-    
-
 
     function init() {
         requestSpeedChange(2);
@@ -303,11 +372,11 @@
         ctx = c.getContext("2d");
         cW = c.width; cH = c.height;
         centreX = tunnelSectionLen = cW/2; centreY = cH/2;
+        pattern = ctx.createPattern(texture, 'repeat')
 
         // set up default drawing stuff
         ctx.lineWidth=2;
-        
-        texture.src='textures/deathstar_tunnel_homemade.png';
+
         ship.src='images/' + theme + '.png';
         
         ship.onload = function() {
@@ -353,12 +422,14 @@
         showScore();
 
         score+=0.5*difficulty;
-        if (score>150 && score<10000 && difficulty<5) { requestSpeedChange(5); } // Medium Speed for humans
-        // we need a slightly faster increase for human players in here (probably 8 at most)
-        if (score>10000 && score<20000 && difficulty<10) { requestSpeedChange(10); } // CPU Only!
-        if (score>20000 && score<30000 && difficulty<20) { requestSpeedChange(20); } // CPU Only!  Youll see why in the demo
-        if (score>30000 && score<32000 && difficulty>10) { requestSpeedChange(10); } // CPU Only!
-        if (score>32000 && difficulty>5) { requestSpeedChange(5); }
+        if (autoDifficulty==true) {
+            if (score>150 && score<10000 && difficulty<5) { requestSpeedChange(5); } // Medium Speed for humans
+            // we need a slightly faster increase for human players in here (probably 8 at most)
+            if (score>10000 && score<20000 && difficulty<10) { requestSpeedChange(10); } // CPU Only!
+            if (score>20000 && score<30000 && difficulty<20) { requestSpeedChange(20); } // CPU Only!  Youll see why in the demo
+            if (score>30000 && score<32000 && difficulty>10) { requestSpeedChange(10); } // CPU Only!
+            if (score>32000 && difficulty>5) { requestSpeedChange(5); }
+        }
         
         // deal with tunnels already in the array
         xPos = tunnelYOffset[0][2];
