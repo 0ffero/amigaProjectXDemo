@@ -33,23 +33,19 @@
     
     function keyDown(e) {
         keyCode = e.code;
-        if (!keysDown[keyCode]) {
-            //config key
+        if (!keysDown[keyCode]) { //config key
             configChange();
         } else {
-            if (keysDown[keyCode]!="ON") {
-                keysDown[keyCode] = "ON";
-                console.log(keysDown);
-            }
+            if ( shipAutoPilot==true ) {  autoDifficulty = false; shipAutoPilot = false; requestSpeedChange(2.5); }
+            if ( keysDown[keyCode]!="ON" ) { keysDown[keyCode] = "ON"; }
         }
     }
     function keyUp(e) {
         keyCode = e.code;
         if (!keysDown[keyCode]) {
-            // do nothing!
+            // config key - do nothing!
         } else if (keysDown[keyCode]!="OFF") {
             keysDown[keyCode]= "OFF";
-            console.log(keysDown);
         }
     }
     function configChange() {
@@ -102,13 +98,15 @@
     // DIFFICULTY VARS
     var difficulty = 1; var autoDifficulty = true;
     var speedX = 10; var maxSpeedX = 50; var speedChange = false;
-    var difficultyLevels = [ 0.5, 1, 2, 5, 10, 20 ];
+    var difficultyLevels = [ 0.5, 1, 2.5, 5, 10, 20 ];
     var bounds = [];
 
     // SHIP AND THEME VARS
     var ships = ['ship', 'xwing']; // xwing theme still to be completed (tunnel bg doesn't scroll yet)
     var theme = ships[0];
-    
+    var shipAccel = 2;
+    var shipMaxSpeed = 10; var shipXSpeed = 0; var shipYSpeed = 0;
+
     var shipAngle = ['-22.5deg', '0', '22.5deg']; var shipXYA = [150, 450, shipAngle[1]]; // the front of the ship is at this pos (used for collision detection)
     var ship = new Image(); 
     var shipSize = [];
@@ -139,7 +137,6 @@
     var score = 0;
 
 
-
     // GLOBAL FUNCTIONS    
 
     // Difficulty Functions
@@ -153,6 +150,54 @@
         bounds = [ [ yOffset1 - (speedX-1), yOffset1 + (speedX-1) ], [ yOffset2 - (speedX-1), yOffset2 + (speedX-1) ] ];
     }
     
+    // PLAYER FUNCTIONS
+    function moveShip() {
+        if (shipXYA[1]>0.05*cH) {
+            if (keysDown['ArrowUp']=="ON") {
+                if (shipYSpeed > -shipMaxSpeed) { shipYSpeed += -shipAccel; } else { shipYSpeed = -shipMaxSpeed; }
+                shipXYA[1]+=shipYSpeed;
+            } else if (keysDown['ArrowUp']=="OFF" && keysDown['ArrowDown']=="OFF") {
+                if (shipYSpeed < 0) { shipYSpeed += shipAccel * 2; } else { shipYSpeed=0; }
+                shipXYA[1] += shipYSpeed;
+            }
+        }
+
+
+        if (shipXYA[1]<0.95*cH) {
+            if (keysDown['ArrowDown']=="ON") {
+                if (shipYSpeed < shipMaxSpeed) { shipYSpeed += shipAccel; } else { shipYSpeed = shipMaxSpeed; }
+                shipXYA[1]+=shipYSpeed;
+            } else if (keysDown['ArrowUp']=="OFF" && keysDown['ArrowDown']=="OFF") {
+                if (shipYSpeed > 0) { shipYSpeed -= shipAccel * 2; } else { shipYSpeed=0; }
+                shipXYA[1] += shipYSpeed;
+            }
+        }
+
+
+        if (shipXYA[0]>shipSize[0]-(shipSize[0]/2)+15) {
+            if (keysDown['ArrowLeft']=="ON") {
+                if (shipXSpeed > -shipMaxSpeed) { shipXSpeed += -shipAccel; } else { shipXSpeed = -shipMaxSpeed; }
+                shipXYA[0]+=shipXSpeed;
+            } else if (keysDown['ArrowLeft']=="OFF" && keysDown['ArrowRight']=="OFF") {
+                if (shipXSpeed < 0) { shipXSpeed += shipAccel * 2; } else { shipXSpeed=0; }
+                shipXYA[0] += shipXSpeed;
+            }
+        }
+
+
+        if (shipXYA[0]<cW-shipSize[0]-10) {
+            if (keysDown['ArrowRight']=="ON") {
+                if (shipXSpeed < shipMaxSpeed) { shipXSpeed += shipAccel; } else { shipXSpeed = shipMaxSpeed; }
+                shipXYA[0]+=shipXSpeed;
+            } else if (keysDown['ArrowRight']=="OFF" && keysDown['ArrowLeft']=="OFF") {
+                if (shipXSpeed > 0) { shipXSpeed -= shipAccel * 2; } else { shipXSpeed=0; }
+                shipXYA[0] += shipXSpeed;
+            }
+        }
+        
+        
+    }
+
     // Ship Functions inc. Collision Detection
     function collisionDetection() {
         userLog = "Collision : ";
@@ -232,11 +277,6 @@
             starField[i][1] -= xOffset*difficulty;            
             }
         }
-    }
-
-    // Texture Functions
-    function textureAnimate() {
-
     }
 
     // Tunnel Functions
@@ -385,8 +425,8 @@
     function showScore() {
         ctx.font = '48px monospace';
         ctx.fillStyle="yellow";
-        message = "SCORE: " + score.toFixed(0);
-        ctx.fillText(message, centreX-(centreX/2), 40, 300);
+        message = "SCORE: " + Intl.NumberFormat('en-GB').format(score.toFixed(0))
+        ctx.fillText(message, cW-310, 40, 300);
     }
     function showOutputLine(userLog, x=10, y=-10, fontsize=24) {
         ctx.font = fontsize + 'px monospace';
@@ -403,7 +443,7 @@
     }
 
     function init() {
-        requestSpeedChange(2);
+        requestSpeedChange(2.5);
         c = document.getElementById("projectxtunnel");
         ctx = c.getContext("2d");
         cW = c.width; cH = c.height;
@@ -454,17 +494,22 @@
         tunnelDraw();
         collisionDetection();
         
+        moveShip();
         drawShip();
         showScore();
 
-        score+=0.5*difficulty;
+        score+=(0.5*difficulty)*10;
         if (autoDifficulty==true) {
-            if (score>150 && score<10000 && difficulty<5) { requestSpeedChange(5); } // Medium Speed for humans
+            if (score>150 && score<100000 && difficulty<5) { requestSpeedChange(5); } // Medium Speed for humans
             // we need a slightly faster increase for human players in here (probably 8 at most)
-            if (score>10000 && score<20000 && difficulty<10) { requestSpeedChange(10); } // CPU Only!
-            if (score>20000 && score<30000 && difficulty<20) { requestSpeedChange(20); } // CPU Only!  Youll see why in the demo
-            if (score>30000 && score<32000 && difficulty>10) { requestSpeedChange(10); } // CPU Only!
-            if (score>32000 && difficulty>5) { requestSpeedChange(5); }
+            if (score>100000 && score<200000 && difficulty<10) { requestSpeedChange(10); } // CPU Only!
+            if (score>200000 && score<300000 && difficulty<20) { requestSpeedChange(20); } // CPU Only!  Youll see why in the demo
+            if (score>300000 && score<320000 && difficulty>10) { requestSpeedChange(10); } // CPU Only!
+            if (score>320000 && difficulty>5) { requestSpeedChange(5); }
+        } else {
+            if (score>10000 && score<100000 && difficulty<5) {
+                requestSpeedChange(5);
+            }
         }
         
         // deal with tunnels already in the array
