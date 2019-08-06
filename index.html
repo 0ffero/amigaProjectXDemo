@@ -123,13 +123,17 @@
     var tunnelSectionLen = 0;
     // TUNNEL AND EXTERNAL TEXTURE
     var tunnelTexture = new Image();
-        tunnelTexture.src='textures/deathstar_tunnel_homemade.png';
+        tunnelTexture.src='textures/deathstar_tunnel_homemade_small.png';
+        tunnelTexture.onload = function() {
+            tTD = [ tunnelTexture.width, tunnelTexture.height ];
+        }
+    var tunnelTextureOffset = 0;
     var tunnelPattern;
     var externalTexture = new Image();
         externalTexture.src='textures/deathstar.png';
+        eTD = [ externalTexture.width, externalTexture.height ];
+    var externalTextureOffset = 0;
     var externalPattern;
-
-
 
     // UI
     var score = 0;
@@ -229,7 +233,12 @@
             }
         }
     }
-    
+
+    // Texture Functions
+    function textureAnimate() {
+
+    }
+
     // Tunnel Functions
     function fillNonTunnel() {
         // this poly will be built when drawing the tunnel
@@ -257,16 +266,31 @@
         ctx.moveTo( poly[0][0], poly[0][1] );
         for( i=1 ; i < poly.length; i++ ){ ctx.lineTo( poly[i][0] , poly[i][1] ); }
         ctx.closePath();
+
+        externalTextureOffset[0]<=speedX ? externalTextureOffset=eTD[0] : externalTextureOffset-=speedX;
         if (theme=="xwing") {
+            ctx.save();
             ctx.fillStyle = externalPattern;
+            ctx.translate(externalTextureOffset, 0);
+            ctx.fill();
+            ctx.restore();
+        } else {
+            ctx.fill();
         }
-        ctx.fill();
 
         ctx.beginPath();
         ctx.moveTo( polyLower[0][0], polyLower[0][1] );
         for( i=1 ; i < polyLower.length; i++ ){ ctx.lineTo( polyLower[i][0] , polyLower[i][1] ); }
         ctx.closePath();
-        ctx.fill();
+        if (theme=="xwing") {
+            ctx.save();
+            ctx.fillStyle = externalPattern;
+            ctx.translate(externalTextureOffset, 0);
+            ctx.fill();
+            ctx.restore();
+        } else {
+            ctx.fill();
+        }
         
     }
     function tunnelDraw() {
@@ -292,8 +316,13 @@
     }
     function tunnelFill() {
         if (theme=="xwing") {
+            tunnelTextureOffset<=speedX ? tunnelTextureOffset=tTD[0] : tunnelTextureOffset-=speedX;
+            //console.log(tunnelTextureOffset);
+            ctx.save();
             ctx.fillStyle = tunnelPattern;
-            ctx.fillRect(0, 80, cW, cH-65-80);
+            ctx.translate(tunnelTextureOffset, 0);
+            ctx.fillRect(0-tTD[0], 80, cW+tTD[0], cH-65-80);
+            ctx.restore();
         }
     }
     function tunnelScroll() {
