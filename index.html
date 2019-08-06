@@ -121,10 +121,15 @@
     // TUNNEL VARS
     var tunnelYOffset = []; var fillOffset=4;
     var tunnelSectionLen = 0;
-    // TUNNEL TEXTURE
-    var texture = new Image();
-        texture.src='textures/deathstar_tunnel_homemade.png';
-    var pattern;
+    // TUNNEL AND EXTERNAL TEXTURE
+    var tunnelTexture = new Image();
+        tunnelTexture.src='textures/deathstar_tunnel_homemade.png';
+    var tunnelPattern;
+    var externalTexture = new Image();
+        externalTexture.src='textures/deathstar.png';
+    var externalPattern;
+
+
 
     // UI
     var score = 0;
@@ -247,18 +252,20 @@
         // rotating colour
         ctx.fillStyle = 'hsl(' + hue + ', 100%, 25%)';
         hue < 359 ? hue+=difficulty/10 : hue=0;
+        
         ctx.beginPath();
         ctx.moveTo( poly[0][0], poly[0][1] );
         for( i=1 ; i < poly.length; i++ ){ ctx.lineTo( poly[i][0] , poly[i][1] ); }
         ctx.closePath();
+        if (theme=="xwing") {
+            ctx.fillStyle = externalPattern;
+        }
         ctx.fill();
 
         ctx.beginPath();
         ctx.moveTo( polyLower[0][0], polyLower[0][1] );
         for( i=1 ; i < polyLower.length; i++ ){ ctx.lineTo( polyLower[i][0] , polyLower[i][1] ); }
         ctx.closePath();
-
-        
         ctx.fill();
         
     }
@@ -285,7 +292,7 @@
     }
     function tunnelFill() {
         if (theme=="xwing") {
-            ctx.fillStyle = pattern;
+            ctx.fillStyle = tunnelPattern;
             ctx.fillRect(0, 80, cW, cH-65-80);
         }
     }
@@ -372,7 +379,8 @@
         ctx = c.getContext("2d");
         cW = c.width; cH = c.height;
         centreX = tunnelSectionLen = cW/2; centreY = cH/2;
-        pattern = ctx.createPattern(texture, 'repeat')
+        tunnelPattern   = ctx.createPattern(tunnelTexture,   'repeat')
+        externalPattern = ctx.createPattern(externalTexture, 'repeat')
 
         // set up default drawing stuff
         ctx.lineWidth=2;
@@ -394,7 +402,6 @@
             // generate star field or deathstar tunnel
             if (theme=="xwing") {
                 c.style.backgroundColor="#333";
-                pattern = ctx.createPattern(texture, 'repeat');
             } else {
                 starFieldGenerate();
             }
@@ -447,7 +454,7 @@
         if (xPos == -tunnelSectionLen) { tunnelAddNewOffset(); }
         if (xPos == -tunnelSectionLen*2) { tunnelAddNewOffset(); tunnelYOffset.shift(); }
 
-        // scroll the tunnels -- this is a sigle line command, but it isn't very "prominent" in the code, so Ive moved it to a function
+        // scroll the tunnels -- this is a single line command, but it isn't very "prominent" in the code, so Ive moved it to a function
         tunnelScroll();
         
         requestAnimationFrame(mainLoop)
